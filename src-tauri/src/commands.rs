@@ -1137,14 +1137,16 @@ pub async fn run_setup_again() -> Result<(), String> {
 /// Stops the first-run crawl and sends the wizard back to folder selection.
 #[tauri::command]
 pub async fn cancel_setup_scan(state: State<'_, AppState>) -> Result<(), String> {
-    if state.daemon.is_some() {
-        return Err("Cancelling the first scan is not supported in daemon mode yet.".to_string());
+    if let Some(daemon) = state.daemon.as_ref() {
+        daemon.cancel_setup_scan()?;
+        // The daemon saved the config; keep this window's copy in agreement.
+        let mut config = state.indexer.config.write();
+        config.is_setup_complete = false;
+        config.first_scan_done = false;
+        Ok(())
+    } else {
+        state.indexer.cancel_setup_scan()
     }
-    state.indexer.request_cancel();
-    let mut config = state.indexer.config.write();
-    config.is_setup_complete = false;
-    config.first_scan_done = false;
-    config.save()
 }
 
 #[tauri::command]

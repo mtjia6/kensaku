@@ -385,6 +385,12 @@ impl DaemonClient {
         request("rescan", serde_json::json!({}))?;
         Ok(())
     }
+
+    /// Stops the daemon's first-run crawl and returns setup to folder selection.
+    pub fn cancel_setup_scan(&self) -> Result<(), String> {
+        request("cancel_setup_scan", serde_json::json!({}))?;
+        Ok(())
+    }
 }
 
 #[cfg(unix)]

@@ -2209,6 +2209,16 @@ impl IndexerManager {
         self.cancel_requested.store(true, Ordering::SeqCst);
     }
 
+    /// Stops the first-run crawl and returns setup to folder selection, so the
+    /// next launch shows the folder picker instead of resuming the scan.
+    pub fn cancel_setup_scan(&self) -> Result<(), String> {
+        self.request_cancel();
+        let mut config = self.config.write();
+        config.is_setup_complete = false;
+        config.first_scan_done = false;
+        config.save()
+    }
+
     pub fn start_indexing_when_idle(self: &Arc<Self>) {
         if !self.config.read().is_setup_complete {
             return;
