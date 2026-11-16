@@ -511,6 +511,7 @@ pub fn run() {
             commands::apply_window_mode,
             commands::is_setup_configured,
             commands::run_setup_again,
+            commands::cancel_setup_scan,
             commands::complete_setup,
             commands::get_suggested_directories,
             commands::validate_directory,

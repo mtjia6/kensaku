@@ -2184,6 +2184,11 @@ impl IndexerManager {
         self.start_indexing_when_idle();
     }
 
+    /// Asks the running crawl to stop at its next safe point.
+    pub fn request_cancel(&self) {
+        self.cancel_requested.store(true, Ordering::SeqCst);
+    }
+
     pub fn start_indexing_when_idle(self: &Arc<Self>) {
         if !self.config.read().is_setup_complete {
             return;
