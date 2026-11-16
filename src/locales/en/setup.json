@@ -33,6 +33,8 @@
     "finishing": "Finishing",
     "estimating": "Estimating",
     "onlyFirstTime": "Only the first time. After this, every launch is instant.",
+    "cancel": "Cancel and change folders",
+    "cancelFailed": "Could not cancel: {{error}}",
     "eta": {
       "seconds": "~{{seconds}}s left",
       "minutes": "~{{minutes}}m {{seconds}}s left",

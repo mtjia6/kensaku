@@ -364,6 +364,18 @@ export function SetupModal({ onSetupCompleted }: { onSetupCompleted: () => void 
     }
   };
 
+  const cancelScan = async () => {
+    try {
+      await invoke("cancel_setup_scan");
+      setScanning(false);
+      setScanStatus(null);
+      setStep(0);
+    } catch (err) {
+      console.error("Cancel failed:", err);
+      alert(t("scan.cancelFailed", { error: String(err) }));
+    }
+  };
+
   /* Setup can index for a long time, so while it is up the window behaves
      like a normal app window: decorated, in the dock/taskbar, minimisable and
      restorable. That is now also how the backend creates it (a setup window is
@@ -514,7 +526,9 @@ export function SetupModal({ onSetupCompleted }: { onSetupCompleted: () => void 
 
         <Footer>
           <p className="text-[12px] text-subtle">{t("scan.onlyFirstTime")}</p>
-          <span />
+          <button type="button" onClick={cancelScan} className="btn btn-ghost h-10">
+            <X className="h-4 w-4" strokeWidth={1.75} /> {t("scan.cancel")}
+          </button>
         </Footer>
       </Shell>
     );

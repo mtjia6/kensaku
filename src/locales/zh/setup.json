@@ -33,6 +33,8 @@
     "finishing": "即将完成",
     "estimating": "正在估算",
     "onlyFirstTime": "仅首次需要。之后每次启动都是即时的。",
+    "cancel": "取消并更改文件夹",
+    "cancelFailed": "无法取消：{{error}}",
     "eta": {
       "seconds": "约 {{seconds}} 秒",
       "minutes": "约 {{minutes}} 分 {{seconds}} 秒",

@@ -33,6 +33,8 @@
     "finishing": "Завершение",
     "estimating": "Оценка",
     "onlyFirstTime": "Только в первый раз. После этого каждый запуск мгновенный.",
+    "cancel": "Отменить и выбрать папки",
+    "cancelFailed": "Не удалось отменить: {{error}}",
     "eta": {
       "seconds": "~{{seconds}} с осталось",
       "minutes": "~{{minutes}} м {{seconds}} с осталось",
