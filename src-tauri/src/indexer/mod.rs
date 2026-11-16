@@ -344,6 +344,8 @@ pub struct IndexerManager {
     /// True while a live filesystem watcher is running.
     pub watcher_ok: Arc<AtomicBool>,
     is_running: Arc<AtomicBool>,
+    /// Set to ask the running crawl to stop early. Cleared when a crawl starts.
+    cancel_requested: Arc<AtomicBool>,
     watcher_handle: Arc<Mutex<Option<WatcherHandle>>>,
     app_handle: Arc<RwLock<Option<tauri::AppHandle>>>,
 }
@@ -466,6 +468,7 @@ impl IndexerManager {
             last_reconcile_unix_secs: Arc::new(AtomicU64::new(0)),
             watcher_ok: Arc::new(AtomicBool::new(false)),
             is_running: Arc::new(AtomicBool::new(false)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
             watcher_handle: Arc::new(Mutex::new(None)),
             app_handle: Arc::new(RwLock::new(None)),
         }
@@ -526,6 +529,7 @@ impl IndexerManager {
             last_reconcile_unix_secs: Arc::new(AtomicU64::new(0)),
             watcher_ok: Arc::new(AtomicBool::new(false)),
             is_running: Arc::new(AtomicBool::new(false)),
+            cancel_requested: Arc::new(AtomicBool::new(false)),
             watcher_handle: Arc::new(Mutex::new(None)),
             app_handle: Arc::new(RwLock::new(None)),
         }
@@ -659,6 +663,7 @@ impl IndexerManager {
             // Already running
             return;
         }
+        self.cancel_requested.store(false, Ordering::SeqCst);
 
         // Stop any watcher left over from a previous indexing run so we never
         // end up with duplicate watchers on the same directories.
@@ -683,6 +688,7 @@ impl IndexerManager {
         let config_arc = Arc::clone(&self.config);
         let status = Arc::clone(&self.status);
         let is_running = Arc::clone(&self.is_running);
+        let cancel_requested = Arc::clone(&self.cancel_requested);
         let watcher_handle = Arc::clone(&self.watcher_handle);
         let app_handle = Arc::clone(&self.app_handle);
         let crawl_start_unix_ms = Arc::clone(&self.crawl_start_unix_ms);
@@ -998,6 +1004,7 @@ impl IndexerManager {
             let producer_status = Arc::clone(&status);
             let producer_app = Arc::clone(&app_handle);
             let producer_config = Arc::clone(&config_arc);
+            let producer_cancel = Arc::clone(&cancel_requested);
             let battery_state = Arc::new(Mutex::new((Instant::now(), false)));
             let pace_gate = Arc::new(Mutex::new(Instant::now()));
             let producer_query_flag = Arc::clone(&query_in_flight);
@@ -1016,6 +1023,9 @@ impl IndexerManager {
 
                 scope.spawn(move || {
                     to_extract.par_iter().for_each_with(tx, |tx, job| {
+                        if producer_cancel.load(Ordering::Relaxed) {
+                            return;
+                        }
                         Self::wait_while_paused(&producer_config, &producer_status, &producer_app);
                         // Search comes first: a user waiting on results must not
                         // queue behind a background scan.
@@ -1475,7 +1485,10 @@ impl IndexerManager {
             // First-scan completion gate: the first full crawl marks setup done.
             {
                 let mut cfg = config_arc.write();
-                if cfg.is_setup_complete && !cfg.first_scan_done {
+                if cfg.is_setup_complete
+                    && !cfg.first_scan_done
+                    && !cancel_requested.load(Ordering::SeqCst)
+                {
                     cfg.first_scan_done = true;
                     let _ = cfg.save();
                 }
