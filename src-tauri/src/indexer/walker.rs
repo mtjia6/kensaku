@@ -2,6 +2,7 @@ use crate::indexer::ignore::IgnoreSet;
 use crate::search::fuzzy::compute_char_mask;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::SystemTime;
 
@@ -268,6 +269,22 @@ pub fn walk_directories(
     include_ignored: bool,
     skip_hidden: bool,
 ) -> Vec<FileEntry> {
+    let never = AtomicBool::new(false);
+    walk_directories_until(dirs, excluded_dirs, include_ignored, skip_hidden, &never)
+}
+
+/// [`walk_directories`] that stops as soon as `cancel` is set.
+///
+/// A cancelled walk returns nothing rather than a partial list, and leaves the
+/// active ignore rules untouched: a partial list would look to the caller like
+/// every unvisited file had been deleted.
+pub fn walk_directories_until(
+    dirs: &[PathBuf],
+    excluded_dirs: &[String],
+    include_ignored: bool,
+    skip_hidden: bool,
+    cancel: &AtomicBool,
+) -> Vec<FileEntry> {
     let mut result = Vec::new();
     let mut ignore_dirs: Vec<PathBuf> = Vec::new();
     let excluded_set: HashSet<String> = excluded_dirs.iter().map(|s| s.to_lowercase()).collect();
@@ -323,6 +340,9 @@ pub fn walk_directories(
             });
 
         for entry_res in walker {
+            if cancel.load(Ordering::Relaxed) {
+                return Vec::new();
+            }
             let entry = match entry_res {
                 Ok(e) => e,
                 Err(_) => continue,
@@ -511,6 +531,20 @@ mod tests {
                     })
             }));
         }
+    }
+
+    #[test]
+    fn cancelled_walk_returns_nothing() {
+        let fixture = HiddenFixture::new();
+        fixture.write("docs/a.txt");
+        fixture.write("docs/b.txt");
+        let root = std::slice::from_ref(&fixture.0);
+
+        let cancel = AtomicBool::new(false);
+        assert!(!walk_directories_until(root, &[], true, false, &cancel).is_empty());
+
+        cancel.store(true, Ordering::Relaxed);
+        assert!(walk_directories_until(root, &[], true, false, &cancel).is_empty());
     }
 
     #[test]

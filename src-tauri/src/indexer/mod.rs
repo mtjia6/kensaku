@@ -17,7 +17,7 @@ use crate::indexer::content::{
 };
 use crate::indexer::extract::IndexMode;
 use crate::indexer::metadata::MetadataStore;
-use crate::indexer::walker::{FileEntry, is_cloud_placeholder_path, walk_directories};
+use crate::indexer::walker::{FileEntry, is_cloud_placeholder_path, walk_directories_until};
 use crate::indexer::watcher::{WatcherHandle, start_file_watcher};
 use crate::search::{SearchDispatcher, SearchResponse, SortOrder};
 use parking_lot::{Mutex, RwLock};
@@ -800,8 +800,13 @@ impl IndexerManager {
             }
 
             // Phase 1: Collect all entries (jwalk is already parallel internally).
-            let all_entries =
-                walk_directories(&watched_dirs, &excluded_dirs, include_ignored, skip_hidden);
+            let all_entries = walk_directories_until(
+                &watched_dirs,
+                &excluded_dirs,
+                include_ignored,
+                skip_hidden,
+                &cancel_requested,
+            );
             let total_entries = all_entries.len();
             if !quiet {
                 let mut st = status.write();
@@ -816,6 +821,9 @@ impl IndexerManager {
             let mut to_extract: Vec<ExtractJob> = Vec::new();
 
             for entry in all_entries {
+                if cancel_requested.load(Ordering::Relaxed) {
+                    break;
+                }
                 files_count += 1;
 
                 // Skip files whose extension is in the excluded list.
@@ -1375,7 +1383,12 @@ impl IndexerManager {
             };
 
             // Drop metadata entries for files that no longer exist on disk.
-            let stale_paths: Vec<PathBuf> = {
+            // A cancelled crawl did not see every file, so "not seen" does not
+            // mean "deleted": skip the sweep and let the next crawl decide.
+            let crawl_cancelled = cancel_requested.load(Ordering::SeqCst);
+            let stale_paths: Vec<PathBuf> = if crawl_cancelled {
+                Vec::new()
+            } else {
                 let store = metadata.read();
                 (0..store.len())
                     .filter_map(|i| {
