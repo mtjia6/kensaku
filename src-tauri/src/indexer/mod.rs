@@ -103,6 +103,12 @@ struct ExtractJob {
     phash_needs_refresh: bool,
 }
 
+/// Whether a finished crawl should record the first scan as done. A cancelled
+/// crawl never does, so the setup wizard returns to folder selection.
+fn marks_first_scan_done(is_setup_complete: bool, first_scan_done: bool, cancelled: bool) -> bool {
+    is_setup_complete && !first_scan_done && !cancelled
+}
+
 /// Crawl order: text before images, newest first within each class, then size.
 fn extract_sort_key(job: &ExtractJob) -> (bool, Reverse<u64>, u64) {
     (job.is_image, Reverse(job.modified), job.size)
@@ -1485,10 +1491,11 @@ impl IndexerManager {
             // First-scan completion gate: the first full crawl marks setup done.
             {
                 let mut cfg = config_arc.write();
-                if cfg.is_setup_complete
-                    && !cfg.first_scan_done
-                    && !cancel_requested.load(Ordering::SeqCst)
-                {
+                if marks_first_scan_done(
+                    cfg.is_setup_complete,
+                    cfg.first_scan_done,
+                    cancel_requested.load(Ordering::SeqCst),
+                ) {
                     cfg.first_scan_done = true;
                     let _ = cfg.save();
                 }
@@ -2524,6 +2531,18 @@ mod tests {
             char_bloom: 0,
             content_pending,
         }
+    }
+
+    #[test]
+    fn cancelled_crawl_does_not_mark_first_scan_done() {
+        // Normal first scan finishing.
+        assert!(marks_first_scan_done(true, false, false));
+        // The user cancelled: setup must stay unfinished.
+        assert!(!marks_first_scan_done(true, false, true));
+        // Later crawls leave an already-finished first scan alone.
+        assert!(!marks_first_scan_done(true, true, false));
+        // Setup was never configured.
+        assert!(!marks_first_scan_done(false, false, false));
     }
 
     #[test]
